@@ -1,11 +1,43 @@
 import requests
 import time
 
-chatID = str(11120169) #mongwater
+outFile = 'messages.csv'
+#chatID = str(11120169) #mongwater
 #chatID = str(35812688) #ma bitches
+chatID = str(59153614) #test
 key = '?token='
 with open('key.txt', 'r') as f:
     key += f.read()
+
+def findFirstMessage(paramDict):
+    response = request(paramDict)
+    firstID = response['messages'][-1]['id']
+    paramDict['before_id'] = firstID
+    paramDict['limit'] = 100
+    firstMessage = {}
+    while True:
+        try:
+            response = request(paramDict)
+        except: break
+        if not response:
+            break
+        firstID = response['messages'][-1]['id']
+        paramDict['before_id'] = firstID
+        message = response['messages'][-1]
+    firstMessage['name'] = message['name']
+    firstMessage['user_id'] = message['user_id']
+    firstMessage['favorited_by'] = message['favorited_by']
+    firstMessage['id'] = message['id']
+    firstMessage['text'] = message['text'].replace(',', ' ')
+    firstMessage['text'] = firstMessage['text'].replace('\n', ' ')
+    firstMessage['created_at'] = message['created_at']
+    for attachment in message['attachments']:
+        if attachment['type'] == 'image':
+            firstMessage['attachments'] = attachment['url']
+            break
+        else:
+            firstMessage['attachments'] = None
+    return firstMessage
 
 def request(paramDict):
     URL = 'https://api.groupme.com/v3'
@@ -13,18 +45,23 @@ def request(paramDict):
         return (requests.get(URL + '/groups/' + chatID + '/messages' + key, params=paramDict)).json()['response']
     except:
         return None
-def parse(paramDict, messageList, IDtoName, done=False):
+
+def parse(paramDict, IDtoName, done=False):
     response = request(paramDict)
-    if not response:
-        return (messageList, IDtoName, None, True)
+    if not response or len(response['messages']) == 0:
+        return (IDtoName, None, True)
     lastID = None
-    for mess in response['messages']:
+    messages = response['messages']
+    for mess in messages:
         message = {}
         usrID = mess['sender_id']
+        message['user_id'] = mess['sender_id']
         lastID = mess['id']
         message['name'] = mess['name'].replace(',', ' ')
-        message['favoritedBy'] = mess['favorited_by']
+        message['favorited_by'] = mess['favorited_by']
         message['text'] = mess['text']
+        message['id'] = mess['id']
+        message['created_at'] = mess['created_at']
         if len(mess['attachments']) is not 0:
             for attachment in mess['attachments']:
                 if attachment['type'] == 'image':
@@ -33,68 +70,64 @@ def parse(paramDict, messageList, IDtoName, done=False):
         else: message['attachments'] = None
         if usrID not in IDtoName:
             IDtoName[usrID] = mess['name'].replace(',', ' ')
-        messageList.append(message)
-    paramDict['before_id'] = lastID
+        writeMessage(message, IDtoName)
+    paramDict['after_id'] = lastID
 
 
-    return (messageList, IDtoName, lastID, done)
+    return (IDtoName, paramDict, done)
 
-def writeFile(messageList, IDtoName):
-    with open('messages.csv', 'w') as f:
-        f.write('Name,Message,Attachments,Favorites,Favorite Count\n')
-        #filewriter = csv.writer(f, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
-        #filewriter.writerow(['Name', 'Message', 'Attachments', 'Favorites'])
-
-        messageList.reverse()
-        for message in messageList:
-            favorited = ''
-            for i, ID in enumerate(message['favoritedBy']):
-                if i == len(message['favoritedBy']) - 1:
-                    try:
-                        favorited = favorited + IDtoName[ID]
-                    except:
-                        favorited = favorited + str(ID)
-                else:
-                    try:
-                        favorited = favorited + IDtoName[ID] + ' | '
-                    except:
-                        favorited = favorited + str(ID) + ' | '
+def writeMessage(message, IDtoName):
+    favorited = ''
+    for i, ID in enumerate(message['favorited_by']):
+        if i == len(message['favorited_by']) - 1:
             try:
-                name = message['name'].replace('\n', ' ')
+                favorited = favorited + IDtoName[ID]
             except:
-                name = 'null'
+                favorited = favorited + str(ID)
+        else:
             try:
-                text = message['text'].replace(',', ' ')
-                text = text.replace('\n', ' ')
+                favorited = favorited + IDtoName[ID] + ' | '
             except:
-                text = 'null'
-            try:
-                if message['attachments'] is not None:
-                    attachment = message['attachments']
-                else:
-                    attachment = 'null'
-            except:
-                attachment = 'null'
-            count = len(message['favoritedBy'])
-            if count != 0:
-                constructedStr = name + ',' + text + ',' + attachment + ',' + favorited + ',' + str(len(message['favoritedBy'])) + '\n'
-            else:
-                constructedStr = name + ',' + text + ',' + attachment + ',' + favorited + ',' + '\n'
-            f.write(constructedStr)
-            #filewriter.writerow([message['name'], message['text'], message['attachments'], favorited])
-
-
+                favorited = favorited + str(ID) + ' | '
+    try:
+        name = message['name'].replace('\n', ' ')
+    except:
+        name = 'null'
+    try:
+        text = message['text'].replace(',', ' ')
+        text = text.replace('\n', ' ')
+        text = text.replace('"', '""')
+    except:
+        text = 'null'
+    try:
+        if message['attachments'] is not None:
+            attachment = message['attachments']
+        else:
+            attachment = 'null'
+    except:
+        attachment = 'null'
+    count = len(message['favorited_by'])
+    if count != 0:
+        constructedStr = str(message['id']) + ',' + str(message['user_id']) + ',' + name + ',' + text + ',' + attachment + ',' + favorited + ',' + str(len(message['favorited_by'])) + ',' + str(message['created_at']) + '\n'
+    else:
+        constructedStr = str(message['id']) + ',' + str(message['user_id']) + ',' + name + ',' + text + ',' + attachment + ',' + favorited + ',' + str(len(message['favorited_by'])) + ',' + str(message['created_at']) +  '\n'
+    with open('messages.csv', 'a') as f:
+        f.write(constructedStr)
 
 def main():
-    messageList = []
+    with open(outFile, 'w') as f:
+        f.write('MessageID,UserID,Name,Message,Attachments,Favorites,Favorite Count,Created At\n')
     IDtoName = {}
     paramDict = {'limit' : 1}
-    messageList, IDtoName, lastID, done = parse(paramDict, messageList, IDtoName)
-    if not done:
-        paramDict['limit'] = 100
-        while not done:
-            messageList, IDtoName, lastID, done = parse(paramDict, messageList, IDtoName)
-    writeFile(messageList, IDtoName)
+    firstMessage = findFirstMessage(paramDict)
+    writeMessage(firstMessage, IDtoName)
+    paramDict['after_id'] = firstMessage['id']
+    paramDict['limit'] = 100
+    del paramDict['before_id']
+    done = False
+    while not done:
+        IDtoName, paramDict, done = parse(paramDict, IDtoName)
+
 
 
 if __name__ == '__main__':

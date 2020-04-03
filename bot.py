@@ -95,6 +95,8 @@ def writeMessage(message, IDtoName):
         name = 'null'
     try:
         text = message['text'].replace(',', ' ')
+        text = text.replace(':', ' ')
+        text = text.replace(';', ' ')
         text = text.replace('\n', ' ')
         text = text.replace('"', '""')
     except:

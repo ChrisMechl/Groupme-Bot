@@ -2,9 +2,10 @@ import requests
 import time
 
 outFile = 'messages.csv'
-#chatID = str(11120169) #mongwater
-#chatID = str(35812688) #ma bitches
-chatID = str(59153614) #test
+chatID = 'testID.txt'
+with open(chatID, 'r') as f:
+    chatID = str(f.read())
+
 key = '?token='
 with open('key.txt', 'r') as f:
     key += f.read()
